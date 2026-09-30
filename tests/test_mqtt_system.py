@@ -107,12 +107,13 @@ class MosquittoSystemTest(unittest.TestCase):
         self.assertTrue(self.users[0][0].startswith("iot-"))
         self.assertTrue(self.users[1][0].startswith("iot-"))
 
-    def test_ten_publishers_reach_two_subscribers(self):
-        """Ten authenticated publishers deliver five messages to each subscriber."""
+    def run_load_test(self, publisher_count: int):
+        """Run one load level with half the messages going to each subscriber."""
         (user1, pass1), (user2, pass2) = self.users[:2]
+        expected_per_receiver = publisher_count // 2
         receivers = [
-            Receiver(self.host, self.port, user1, pass1, expected=5),
-            Receiver(self.host, self.port, user2, pass2, expected=5),
+            Receiver(self.host, self.port, user1, pass1, expected=expected_per_receiver),
+            Receiver(self.host, self.port, user2, pass2, expected=expected_per_receiver),
         ]
         try:
             for receiver in receivers:
@@ -122,16 +123,33 @@ class MosquittoSystemTest(unittest.TestCase):
                 self.assertTrue(receiver.subscribed.wait(10), receiver.error)
 
             time.sleep(1)
-            for index in range(10):
+            for index in range(publisher_count):
                 username, password = (user1, pass1) if index % 2 == 0 else (user2, pass2)
                 publish(self.host, self.port, username, password, index)
 
+            deadline = time.monotonic() + 10
             for receiver in receivers:
-                self.assertTrue(receiver.finished.wait(10), receiver.error)
+                remaining = max(0, deadline - time.monotonic())
+                self.assertTrue(receiver.finished.wait(remaining), receiver.error)
                 self.assertEqual(len(receiver.messages), receiver.expected, receiver.username)
         finally:
             for receiver in receivers:
                 receiver.stop()
+
+    def test_10_publishers_reach_two_subscribers(self):
+        self.run_load_test(10)
+
+    def test_20_publishers_reach_two_subscribers(self):
+        self.run_load_test(20)
+
+    def test_30_publishers_reach_two_subscribers(self):
+        self.run_load_test(30)
+
+    def test_40_publishers_reach_two_subscribers(self):
+        self.run_load_test(40)
+
+    def test_50_publishers_reach_two_subscribers(self):
+        self.run_load_test(50)
 
 
 if __name__ == "__main__":
