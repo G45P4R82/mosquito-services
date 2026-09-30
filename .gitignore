@@ -8,3 +8,4 @@ log/
 # Local credentials file consumed by `make add`
 users/users.txt
 TESTE_LOCAL.txt
+TESTE.txt
