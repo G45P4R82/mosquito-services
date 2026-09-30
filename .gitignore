@@ -9,3 +9,4 @@ log/
 users/users.txt
 TESTE_LOCAL.txt
 TESTE.txt
+.venv/
