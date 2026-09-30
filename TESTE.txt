@@ -1,0 +1,94 @@
+TESTE DO MOSQUITTO MQTT
+========================
+
+Substitua SENHA_DO_IOT_001 pela senha real do usuario.
+Nunca coloque senhas reais neste arquivo ou no GitHub.
+
+1. Verificar o servico
+----------------------
+
+docker compose ps
+
+make logs
+
+
+2. Escutar comandos do iot-sensor-001
+--------------------------------------
+
+mosquitto_sub \
+  -h 127.0.0.1 \
+  -p 1883 \
+  -u iot-sensor-001 \
+  -P 'SENHA_DO_IOT_001' \
+  -t 'comandos/iot-sensor-001/#' \
+  -v
+
+
+3. Publicar um comando para o IoT
+----------------------------------
+
+Em outro terminal:
+
+mosquitto_pub \
+  -h 127.0.0.1 \
+  -p 1883 \
+  -u iot-sensor-001 \
+  -P 'SENHA_DO_IOT_001' \
+  -t 'comandos/iot-sensor-001/led' \
+  -m '{"estado":"on"}'
+
+
+4. Escutar dados publicados pelo sensor
+-----------------------------------------
+
+mosquitto_sub \
+  -h 127.0.0.1 \
+  -p 1883 \
+  -u iot-sensor-001 \
+  -P 'SENHA_DO_IOT_001' \
+  -t 'sensores/iot-sensor-001/#' \
+  -v
+
+
+5. Publicar uma leitura do sensor
+---------------------------------
+
+mosquitto_pub \
+  -h 127.0.0.1 \
+  -p 1883 \
+  -u iot-sensor-001 \
+  -P 'SENHA_DO_IOT_001' \
+  -t 'sensores/iot-sensor-001/temperatura' \
+  -m '{"valor":25.4,"unidade":"C"}'
+
+
+6. Testar senha invalida
+------------------------
+
+mosquitto_pub \
+  -h 127.0.0.1 \
+  -p 1883 \
+  -u iot-sensor-001 \
+  -P 'senha-incorreta' \
+  -t 'sensores/iot-sensor-001/teste' \
+  -m 'teste'
+
+O comando deve falhar por autenticacao.
+
+
+7. Instalar os clientes MQTT no Ubuntu/Debian
+----------------------------------------------
+
+sudo apt install mosquitto-clients
+
+
+ACL padrao
+----------
+
+iot-sensor-001 publica em:
+sensores/iot-sensor-001/#
+
+iot-sensor-001 le:
+comandos/iot-sensor-001/#
+
+O iot-sensor-002 usa os mesmos padroes, trocando o nome do usuario.
