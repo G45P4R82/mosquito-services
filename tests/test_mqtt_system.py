@@ -5,6 +5,7 @@ import os
 import threading
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
@@ -123,14 +124,22 @@ class MosquittoSystemTest(unittest.TestCase):
                 self.assertTrue(receiver.subscribed.wait(10), receiver.error)
 
             time.sleep(1)
-            for index in range(publisher_count):
-                username, password = (user1, pass1) if index % 2 == 0 else (user2, pass2)
-                publish(self.host, self.port, username, password, index)
+            with ThreadPoolExecutor(max_workers=publisher_count) as executor:
+                jobs = []
+                for index in range(publisher_count):
+                    username, password = (user1, pass1) if index % 2 == 0 else (user2, pass2)
+                    jobs.append(executor.submit(publish, self.host, self.port, username, password, index))
+                for job in jobs:
+                    job.result()
 
             deadline = time.monotonic() + 10
             for receiver in receivers:
                 remaining = max(0, deadline - time.monotonic())
-                self.assertTrue(receiver.finished.wait(remaining), receiver.error)
+                self.assertTrue(
+                    receiver.finished.wait(remaining),
+                    f"{receiver.username}: received {len(receiver.messages)}/"
+                    f"{receiver.expected}; {receiver.error or 'timeout'}",
+                )
                 self.assertEqual(len(receiver.messages), receiver.expected, receiver.username)
         finally:
             for receiver in receivers:
