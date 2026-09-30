@@ -1,0 +1,65 @@
+name: Mosquitto Integration Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  mqtt-system-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-test.txt
+
+      - name: Create CI MQTT users
+        run: |
+          cat > users/users.txt <<'EOF'
+          iot-sensor-001:ci-password-001
+          iot-sensor-002:ci-password-002
+          EOF
+          chmod 600 users/users.txt
+
+      - name: Generate password file
+        run: make add
+
+      - name: Start Mosquitto
+        run: make apply
+
+      - name: Wait for MQTT port
+        run: |
+          python - <<'PY'
+          import socket
+          import time
+
+          for attempt in range(30):
+              try:
+                  with socket.create_connection(("127.0.0.1", 1883), timeout=1):
+                      break
+              except OSError:
+                  if attempt == 29:
+                      raise
+                  time.sleep(1)
+          PY
+
+      - name: Run unittest load tests
+        run: python -m unittest -v tests.test_mqtt_system
+
+      - name: Show Mosquitto logs
+        if: always()
+        run: docker compose logs --no-color --tail=200 mosquitto
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v

@@ -27,4 +27,4 @@ check:
 
 add: config
 	USERS_FILE="$(USERS_FILE)" ./scripts/add-users.sh
-	$(COMPOSE) restart mosquitto
+	$(COMPOSE) up -d --force-recreate
