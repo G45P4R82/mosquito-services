@@ -42,5 +42,4 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$users_file"
 
 docker compose run --rm --no-deps --user 0 -T mosquitto \
-    chown 1883:1883 "$password_file"
-chmod 640 "$password_file"
+    chown root:root "$password_file"

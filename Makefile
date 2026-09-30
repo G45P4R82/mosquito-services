@@ -19,8 +19,7 @@ logs:
 
 config:
 	mkdir -p config data log
-	touch config/passwd
-	chmod 640 config/passwd
+	[ -f config/passwd ] || touch config/passwd
 
 check:
 	$(COMPOSE) config
