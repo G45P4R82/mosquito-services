@@ -28,11 +28,13 @@ class Receiver:
         self.expected = expected
         self.messages: list[str] = []
         self.connected = threading.Event()
+        self.subscribed = threading.Event()
         self.finished = threading.Event()
         self.error = None
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"test-receiver-{username}")
         self.client.username_pw_set(username, password)
         self.client.on_connect = self.on_connect
+        self.client.on_subscribe = self.on_subscribe
         self.client.on_message = self.on_message
         self.host = host
         self.port = port
@@ -46,6 +48,12 @@ class Receiver:
             self.error = f"{self.username}: subscribe failed: {result}"
             return
         self.connected.set()
+
+    def on_subscribe(self, client, userdata, mid, granted_qos, properties=None):
+        if not granted_qos or granted_qos[0] >= 128:
+            self.error = f"{self.username}: subscription not authorized: {granted_qos}"
+            return
+        self.subscribed.set()
 
     def on_message(self, client, userdata, message):
         self.messages.append(message.payload.decode())
@@ -99,6 +107,9 @@ def main() -> int:
         if not all(receiver.connected.wait(10) for receiver in receivers):
             errors = "; ".join(receiver.error or receiver.username for receiver in receivers)
             raise RuntimeError(f"receivers did not connect or subscribe: {errors}")
+        if not all(receiver.subscribed.wait(10) for receiver in receivers):
+            errors = "; ".join(receiver.error or receiver.username for receiver in receivers)
+            raise RuntimeError(f"receivers were not authorized to subscribe: {errors}")
 
         time.sleep(1)
         for index in range(10):
@@ -106,7 +117,10 @@ def main() -> int:
             publish(args.host, args.port, username, password, index)
 
         if not all(receiver.finished.wait(10) for receiver in receivers):
-            raise RuntimeError("timeout waiting for subscriber messages")
+            received = ", ".join(
+                f"{receiver.username}={len(receiver.messages)}" for receiver in receivers
+            )
+            raise RuntimeError(f"timeout waiting for subscriber messages ({received})")
         for receiver in receivers:
             if len(receiver.messages) != receiver.expected:
                 raise RuntimeError(
