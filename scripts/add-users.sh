@@ -2,7 +2,7 @@
 set -eu
 
 users_file="${USERS_FILE:-users/users.txt}"
-password_file="config/passwd"
+password_file="/mosquitto/config/passwd"
 
 if [ ! -f "$users_file" ]; then
     printf 'Arquivo de usuarios nao encontrado: %s\n' "$users_file" >&2
