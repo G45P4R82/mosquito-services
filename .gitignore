@@ -1,0 +1,9 @@
+.env
+
+# Runtime data and generated credentials
+config/passwd
+data/
+log/
+
+# Local credentials file consumed by `make add`
+users/users.txt

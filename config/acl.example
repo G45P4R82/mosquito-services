@@ -1,0 +1,9 @@
+# Copy this file to config/acl and customize it when needed.
+# The %u placeholder is replaced by the authenticated MQTT username.
+
+pattern write sensores/%u/#
+pattern read comandos/%u/#
+
+# Example shared read-only topic:
+# user dashboard
+# topic read sensores/+

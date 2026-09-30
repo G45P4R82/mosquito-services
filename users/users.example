@@ -1,0 +1,6 @@
+# One MQTT user per line: username:password
+# Do not use this file for production credentials.
+# Lines beginning with # and blank lines are ignored.
+
+iot-sensor-001:change-this-password
+iot-sensor-002:change-this-password
