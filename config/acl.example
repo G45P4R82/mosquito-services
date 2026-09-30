@@ -1,6 +1,11 @@
 # Copy this file to config/acl and customize it when needed.
 # The %u placeholder is replaced by the authenticated MQTT username.
 
+# Example explicit user policy:
+# user iot-sensor-001
+# topic readwrite sensores/iot-sensor-001/#
+# topic read comandos/iot-sensor-001/#
+
 pattern write sensores/%u/#
 pattern read sensores/%u/#
 pattern read comandos/%u/#

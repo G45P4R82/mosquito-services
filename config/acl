@@ -1,6 +1,16 @@
 # Default policy: users can only access their own device namespace.
 # Add explicit entries here when a device needs shared topics.
 
+# Explicit permissions for the two default test IoTs.
+user iot-sensor-001
+topic readwrite sensores/iot-sensor-001/#
+topic read comandos/iot-sensor-001/#
+
+user iot-sensor-002
+topic readwrite sensores/iot-sensor-002/#
+topic read comandos/iot-sensor-002/#
+
+# Dynamic policy for additional users created with make add.
 pattern write sensores/%u/#
 pattern read sensores/%u/#
 pattern read comandos/%u/#
