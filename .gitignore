@@ -12,3 +12,4 @@ TESTE.txt
 .venv/
 __pycache__/
 tests/__pycache__/
+config/.stress-users

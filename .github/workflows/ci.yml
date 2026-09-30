@@ -55,7 +55,7 @@ jobs:
           PY
 
       - name: Run unittest load tests
-        run: python -m unittest -v tests.test_mqtt_system
+        run: python -m unittest discover -v tests
 
       - name: Show Mosquitto logs
         if: always()
