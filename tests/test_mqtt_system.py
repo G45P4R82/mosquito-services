@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Integration test: 10 publishers send data to 2 authenticated subscribers."""
+"""Integration tests for 10 MQTT publishers and 2 subscribers."""
 
-import argparse
+import os
 import threading
 import time
+import unittest
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
@@ -17,9 +18,7 @@ def load_users(path: Path) -> list[tuple[str, str]]:
             continue
         username, password = line.split(":", 1)
         users.append((username, password))
-    if len(users) < 2:
-        raise ValueError("users file must contain at least two users")
-    return users[:2]
+    return users
 
 
 class Receiver:
@@ -31,7 +30,10 @@ class Receiver:
         self.subscribed = threading.Event()
         self.finished = threading.Event()
         self.error = None
-        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"test-receiver-{username}")
+        self.client = mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION2,
+            client_id=f"unittest-receiver-{username}",
+        )
         self.client.username_pw_set(username, password)
         self.client.on_connect = self.on_connect
         self.client.on_subscribe = self.on_subscribe
@@ -41,17 +43,17 @@ class Receiver:
 
     def on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code.is_failure:
-            self.error = f"{self.username}: connection failed: {reason_code}"
+            self.error = f"connection failed: {reason_code}"
             return
         result, _ = client.subscribe(f"sensores/{self.username}/#", qos=1)
         if result != mqtt.MQTT_ERR_SUCCESS:
-            self.error = f"{self.username}: subscribe failed: {result}"
+            self.error = f"subscribe request failed: {result}"
             return
         self.connected.set()
 
     def on_subscribe(self, client, userdata, mid, granted_qos, properties=None):
         if not granted_qos or granted_qos[0] >= 128:
-            self.error = f"{self.username}: subscription not authorized: {granted_qos}"
+            self.error = f"subscription rejected: {granted_qos}"
             return
         self.subscribed.set()
 
@@ -70,70 +72,67 @@ class Receiver:
 
 
 def publish(host: str, port: int, username: str, password: str, index: int) -> None:
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"test-publisher-{index}")
+    client = mqtt.Client(
+        mqtt.CallbackAPIVersion.VERSION2,
+        client_id=f"unittest-publisher-{index}",
+    )
     client.username_pw_set(username, password)
     client.connect(host, port, keepalive=30)
     client.loop_start()
     info = client.publish(
-        f"sensores/{username}/system-test/{index}",
+        f"sensores/{username}/unittest/{index}",
         payload=f'{{"iot":{index},"status":"ok"}}',
         qos=1,
     )
     info.wait_for_publish(timeout=10)
-    if not info.is_published() or info.rc != mqtt.MQTT_ERR_SUCCESS:
+    try:
+        if not info.is_published() or info.rc != mqtt.MQTT_ERR_SUCCESS:
+            raise RuntimeError(f"publish failed: {info.rc}")
+    finally:
         client.loop_stop()
         client.disconnect()
-        raise RuntimeError(f"publisher {index} failed: {info.rc}")
-    client.loop_stop()
-    client.disconnect()
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=1883)
-    parser.add_argument("--users", type=Path, default=Path("users/users.txt"))
-    args = parser.parse_args()
+class MosquittoSystemTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.host = os.getenv("MQTT_TEST_HOST", "127.0.0.1")
+        cls.port = int(os.getenv("MQTT_TEST_PORT", "1883"))
+        users_file = Path(os.getenv("MQTT_USERS_FILE", "users/users.txt"))
+        cls.users = load_users(users_file)
 
-    (user1, pass1), (user2, pass2) = load_users(args.users)
-    receivers = [
-        Receiver(args.host, args.port, user1, pass1, expected=5),
-        Receiver(args.host, args.port, user2, pass2, expected=5),
-    ]
+    def test_users_file_has_two_iots(self):
+        """The local credentials file contains both simulated IoT accounts."""
+        self.assertGreaterEqual(len(self.users), 2)
+        self.assertTrue(self.users[0][0].startswith("iot-"))
+        self.assertTrue(self.users[1][0].startswith("iot-"))
 
-    try:
-        for receiver in receivers:
-            receiver.start()
-        if not all(receiver.connected.wait(10) for receiver in receivers):
-            errors = "; ".join(receiver.error or receiver.username for receiver in receivers)
-            raise RuntimeError(f"receivers did not connect or subscribe: {errors}")
-        if not all(receiver.subscribed.wait(10) for receiver in receivers):
-            errors = "; ".join(receiver.error or receiver.username for receiver in receivers)
-            raise RuntimeError(f"receivers were not authorized to subscribe: {errors}")
+    def test_ten_publishers_reach_two_subscribers(self):
+        """Ten authenticated publishers deliver five messages to each subscriber."""
+        (user1, pass1), (user2, pass2) = self.users[:2]
+        receivers = [
+            Receiver(self.host, self.port, user1, pass1, expected=5),
+            Receiver(self.host, self.port, user2, pass2, expected=5),
+        ]
+        try:
+            for receiver in receivers:
+                receiver.start()
+            for receiver in receivers:
+                self.assertTrue(receiver.connected.wait(10), receiver.error)
+                self.assertTrue(receiver.subscribed.wait(10), receiver.error)
 
-        time.sleep(1)
-        for index in range(10):
-            username, password = (user1, pass1) if index % 2 == 0 else (user2, pass2)
-            publish(args.host, args.port, username, password, index)
+            time.sleep(1)
+            for index in range(10):
+                username, password = (user1, pass1) if index % 2 == 0 else (user2, pass2)
+                publish(self.host, self.port, username, password, index)
 
-        if not all(receiver.finished.wait(10) for receiver in receivers):
-            received = ", ".join(
-                f"{receiver.username}={len(receiver.messages)}" for receiver in receivers
-            )
-            raise RuntimeError(f"timeout waiting for subscriber messages ({received})")
-        for receiver in receivers:
-            if len(receiver.messages) != receiver.expected:
-                raise RuntimeError(
-                    f"{receiver.username}: received {len(receiver.messages)}, "
-                    f"expected {receiver.expected}"
-                )
-            print(f"PASS {receiver.username}: {len(receiver.messages)} messages received")
-        print("PASS: 10 publishers simulated, 2 subscribers validated")
-        return 0
-    finally:
-        for receiver in receivers:
-            receiver.stop()
+            for receiver in receivers:
+                self.assertTrue(receiver.finished.wait(10), receiver.error)
+                self.assertEqual(len(receiver.messages), receiver.expected, receiver.username)
+        finally:
+            for receiver in receivers:
+                receiver.stop()
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    unittest.main(verbosity=2)

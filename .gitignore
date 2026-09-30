@@ -10,3 +10,5 @@ users/users.txt
 TESTE_LOCAL.txt
 TESTE.txt
 .venv/
+__pycache__/
+tests/__pycache__/
