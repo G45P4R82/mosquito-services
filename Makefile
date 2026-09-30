@@ -18,8 +18,9 @@ logs:
 	$(COMPOSE) logs -f --tail=100 mosquitto
 
 config:
-	mkdir -p config data log
+	mkdir -p config data
 	[ -f config/passwd ] || touch config/passwd
+	$(COMPOSE) run --rm --no-deps --user 0 -T mosquitto sh -c 'chown -R 1883:1883 /mosquitto/data && chown root:root /mosquitto/config/passwd && chmod 644 /mosquitto/config/passwd'
 
 check:
 	$(COMPOSE) config

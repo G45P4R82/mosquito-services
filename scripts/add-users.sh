@@ -43,3 +43,6 @@ done < "$users_file"
 
 docker compose run --rm --no-deps --user 0 -T mosquitto \
     chown root:root "$password_file"
+
+docker compose run --rm --no-deps --user 0 -T mosquitto \
+    chmod 644 "$password_file"
