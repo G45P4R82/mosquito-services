@@ -1,94 +1,113 @@
 TESTE DO MOSQUITTO MQTT
 ========================
 
-Substitua SENHA_DO_IOT_001 pela senha real do usuario.
-Nunca coloque senhas reais neste arquivo ou no GitHub.
+Este teste usa diretamente users/users.txt.
+Nao copie usuarios ou senhas para este arquivo.
 
-1. Verificar o servico
+Formato esperado em users/users.txt:
+
+iot-sensor-001:senha-do-iot-001
+iot-sensor-002:senha-do-iot-002
+
+
+1. Preparar as credenciais a partir do users.txt
+-------------------------------------------------
+
+Execute em um terminal Bash, dentro do repositorio:
+
+read -r IOT1_USER IOT1_PASS <<EOF
+$(awk -F: '!/^#/ && NF { print $1, $2; exit }' users/users.txt)
+EOF
+
+read -r IOT2_USER IOT2_PASS <<EOF
+$(awk -F: '!/^#/ && NF { n++; if (n == 2) print $1, $2 }' users/users.txt)
+EOF
+
+echo "Usuario 1: $IOT1_USER"
+echo "Usuario 2: $IOT2_USER"
+
+
+2. Verificar o servico
 ----------------------
 
 docker compose ps
-
 make logs
 
 
-2. Escutar comandos do iot-sensor-001
---------------------------------------
+3. Escutar comandos do primeiro IoT
+------------------------------------
 
 mosquitto_sub \
   -h 127.0.0.1 \
   -p 1883 \
-  -u iot-sensor-001 \
-  -P 'SENHA_DO_IOT_001' \
-  -t 'comandos/iot-sensor-001/#' \
+  -u "$IOT1_USER" \
+  -P "$IOT1_PASS" \
+  -t "comandos/$IOT1_USER/#" \
   -v
 
 
-3. Publicar um comando para o IoT
-----------------------------------
+4. Publicar um comando para o primeiro IoT
+-------------------------------------------
 
-Em outro terminal:
+Em outro terminal, repita a secao 1 para carregar as variaveis e execute:
 
 mosquitto_pub \
   -h 127.0.0.1 \
   -p 1883 \
-  -u iot-sensor-001 \
-  -P 'SENHA_DO_IOT_001' \
-  -t 'comandos/iot-sensor-001/led' \
+  -u "$IOT1_USER" \
+  -P "$IOT1_PASS" \
+  -t "comandos/$IOT1_USER/led" \
   -m '{"estado":"on"}'
 
 
-4. Escutar dados publicados pelo sensor
------------------------------------------
+5. Escutar dados publicados pelo primeiro IoT
+----------------------------------------------
 
 mosquitto_sub \
   -h 127.0.0.1 \
   -p 1883 \
-  -u iot-sensor-001 \
-  -P 'SENHA_DO_IOT_001' \
-  -t 'sensores/iot-sensor-001/#' \
+  -u "$IOT1_USER" \
+  -P "$IOT1_PASS" \
+  -t "sensores/$IOT1_USER/#" \
   -v
 
 
-5. Publicar uma leitura do sensor
----------------------------------
+6. Publicar uma leitura do primeiro IoT
+----------------------------------------
 
 mosquitto_pub \
   -h 127.0.0.1 \
   -p 1883 \
-  -u iot-sensor-001 \
-  -P 'SENHA_DO_IOT_001' \
-  -t 'sensores/iot-sensor-001/temperatura' \
+  -u "$IOT1_USER" \
+  -P "$IOT1_PASS" \
+  -t "sensores/$IOT1_USER/temperatura" \
   -m '{"valor":25.4,"unidade":"C"}'
 
 
-6. Testar senha invalida
+7. Testar o segundo IoT
+-----------------------
+
+Use as mesmas linhas dos testes acima, substituindo:
+
+IOT1_USER por IOT2_USER
+IOT1_PASS por IOT2_PASS
+
+
+8. Testar senha invalida
 ------------------------
 
 mosquitto_pub \
   -h 127.0.0.1 \
   -p 1883 \
-  -u iot-sensor-001 \
+  -u "$IOT1_USER" \
   -P 'senha-incorreta' \
-  -t 'sensores/iot-sensor-001/teste' \
+  -t "sensores/$IOT1_USER/teste" \
   -m 'teste'
 
 O comando deve falhar por autenticacao.
 
 
-7. Instalar os clientes MQTT no Ubuntu/Debian
+9. Instalar os clientes MQTT no Ubuntu/Debian
 ----------------------------------------------
 
 sudo apt install mosquitto-clients
-
-
-ACL padrao
-----------
-
-iot-sensor-001 publica em:
-sensores/iot-sensor-001/#
-
-iot-sensor-001 le:
-comandos/iot-sensor-001/#
-
-O iot-sensor-002 usa os mesmos padroes, trocando o nome do usuario.
